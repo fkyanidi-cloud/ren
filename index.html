@@ -282,7 +282,10 @@ async function loadData(showSkeleton){
     const csvText = await res.text();
     const rows = parseCSV(csvText);
     const found = findColumns(rows);
-    if(!found) throw new Error("Δεν βρέθηκαν οι στήλες");
+    if(!found){
+      const preview = rows.slice(0, 8).map((r,i) => `Γραμμή ${i+1}: [${r.join(" | ")}]`).join("\n");
+      throw new Error("COLUMNS_NOT_FOUND::" + preview);
+    }
 
     const { headerRow, map } = found;
     const data = [];
@@ -309,13 +312,27 @@ async function loadData(showSkeleton){
     renderList();
   } catch(err){
     dot.className = "dot err";
-    text.textContent = "Σφάλμα σύνδεσης";
-    if(showSkeleton || allRows.length === 0){
-      document.getElementById("listContainer").innerHTML =
-        `<div class="error-state">
-           Δεν ήταν δυνατή η φόρτωση των δεδομένων.<br>Έλεγξε τη σύνδεση ή τα δικαιώματα κοινής χρήσης του sheet.
-           <br><button onclick="loadData(true)">Δοκίμασε ξανά</button>
-         </div>`;
+    const msg = err && err.message ? err.message : "";
+    if(msg.startsWith("COLUMNS_NOT_FOUND::")){
+      text.textContent = "Δεν βρέθηκαν οι στήλες";
+      const preview = msg.replace("COLUMNS_NOT_FOUND::", "");
+      if(showSkeleton || allRows.length === 0){
+        document.getElementById("listContainer").innerHTML =
+          `<div class="error-state">
+             Βρήκα το sheet, αλλά δεν αναγνώρισα τις στήλες ΤΟΠΟΘΕΣΙΑ/ID.<br>Στείλε screenshot του παρακάτω κειμένου:
+             <pre style="text-align:left; white-space:pre-wrap; background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:12px; font-size:11px; color:var(--ink);">${escapeHtml(preview)}</pre>
+             <button onclick="loadData(true)">Δοκίμασε ξανά</button>
+           </div>`;
+      }
+    } else {
+      text.textContent = "Σφάλμα σύνδεσης";
+      if(showSkeleton || allRows.length === 0){
+        document.getElementById("listContainer").innerHTML =
+          `<div class="error-state">
+             Δεν ήταν δυνατή η φόρτωση των δεδομένων.<br>Έλεγξε τη σύνδεση ή τα δικαιώματα κοινής χρήσης του sheet.
+             <br><button onclick="loadData(true)">Δοκίμασε ξανά</button>
+           </div>`;
+      }
     }
   } finally {
     refreshBtn.classList.remove("spin");
