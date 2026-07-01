@@ -193,7 +193,8 @@
 <script>
 const SHEET_ID = "1bPntA-aU7EUmuwKcoZMFhYQYdReZ2zO1vRuJLZ3d99w";
 const SHEET_NAME = "CHECK_2";
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+const CSV_URL = `https://corsproxy.io/?url=${encodeURIComponent(GVIZ_URL)}`;
 
 const REQUIRED = {
   loc: ["ΤΟΠΟΘΕΣΙΑ"],
