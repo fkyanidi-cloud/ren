@@ -238,14 +238,15 @@ function norm(s){ return (s||"").toString().trim().toUpperCase(); }
 function findColumns(rows){
   for(let r=0; r<rows.length; r++){
     const cells = rows[r].map(norm);
-    if(cells.includes("ΤΟΠΟΘΕΣΙΑ") && cells.includes("ID")){
-      const map = {};
-      for(const key in REQUIRED){
-        const options = REQUIRED[key].map(norm);
-        let idx = -1;
-        for(const opt of options){ idx = cells.indexOf(opt); if(idx !== -1) break; }
-        map[key] = idx;
-      }
+    if(cells[0] === "ΤΟΠΟΘΕΣΙΑ"){
+      // Fixed column positions confirmed from the CHECK_2 table structure:
+      // 0 ΤΟΠΟΘΕΣΙΑ | 1 ID | 2 ΙΔΙΟΚΤΗΤΗΣ | 3 ΘΕΣΗ | 4 LAST CHECK | 5 (hidden)
+      // 6 DAYS SINCE LAST CHECK | 7 PRIORITY | 8 (hidden)
+      // 9 CLICKS RAN | 10 CLICKS XORT | 11 CLICKS RAN&XORT | 12 TOTAL CHARGE
+      const map = {
+        loc: 0, id: 1, lastCheck: 4, days: 6, priority: 7,
+        clicksRan: 9, clicksXort: 10, clicksBoth: 11
+      };
       return { headerRow: r, map };
     }
   }
