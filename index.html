@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CHECK_2 · Τοποθεσίες</title>
+<style>
+  :root{
+    --bg: #F5F6F8;
+    --surface: #FFFFFF;
+    --ink: #17202B;
+    --ink-soft: #5B6672;
+    --line: #E4E7EB;
+    --accent: #0D7377;
+    --accent-soft: #E4F3F2;
+    --high: #D6392B;
+    --high-bg: #FCE8E6;
+    --med: #C97A0A;
+    --med-bg: #FBEEDB;
+    --low: #1F8A4C;
+    --low-bg: #E4F5EA;
+    --neutral: #6B7480;
+    --neutral-bg: #EDEFF2;
+    --mono: 'SFMono-Regular', 'IBM Plex Mono', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:var(--sans); height:100%;}
+  body{overscroll-behavior-y: none;}
+
+  /* ---------- Header ---------- */
+  header{
+    position: sticky; top:0; z-index:20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: env(safe-area-inset-top, 14px) 16px 12px 16px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+  }
+  .title-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  h1{font-size:19px; font-weight:700; margin:0; letter-spacing:-0.2px;}
+  .sync{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-soft); }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+  .dot.live{ animation: pulse 2s infinite; }
+  @keyframes pulse{ 0%{opacity:1;} 50%{opacity:.35;} 100%{opacity:1;} }
+  .dot.err{ background: var(--high); animation:none; }
+
+  .search-row{ display:flex; gap:8px; }
+  .search-box{
+    flex:1; display:flex; align-items:center; gap:8px;
+    background: var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding: 9px 12px;
+  }
+  .search-box input{
+    border:none; background:transparent; outline:none; font-size:15px; width:100%; color:var(--ink); font-family:var(--sans);
+  }
+  .refresh-btn{
+    width:38px; height:38px; border-radius:10px; border:1px solid var(--line);
+    background: var(--surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    color: var(--accent);
+  }
+  .refresh-btn.spin svg{ animation: spin 0.8s linear infinite; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  .sort-row{ display:flex; gap:6px; margin-top:10px; overflow-x:auto; padding-bottom:2px; }
+  .sort-chip{
+    flex-shrink:0; font-size:12.5px; padding:6px 12px; border-radius:999px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); font-weight:600;
+  }
+  .sort-chip.active{ background: var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* ---------- List ---------- */
+  main{ padding: 12px 12px 40px 12px; max-width:640px; margin:0 auto; }
+  .count-line{ font-size:12px; color:var(--ink-soft); padding: 2px 4px 10px 4px; }
+
+  .card{
+    background: var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding: 14px; margin-bottom:10px;
+  }
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px;}
+  .loc{ font-size:15.5px; font-weight:700; line-height:1.3; }
+  .badge{
+    flex-shrink:0; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap;
+  }
+  .badge.high{ background:var(--high-bg); color:var(--high); }
+  .badge.med{ background:var(--med-bg); color:var(--med); }
+  .badge.low{ background:var(--low-bg); color:var(--low); }
+  .badge.neutral{ background:var(--neutral-bg); color:var(--neutral); }
+
+  .meta-row{ display:flex; gap:18px; flex-wrap:wrap; }
+  .meta{ display:flex; flex-direction:column; gap:2px; }
+  .meta .label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); font-weight:600;}
+  .meta .value{ font-size:13.5px; font-weight:600; }
+  .meta .value.days-warn{ color: var(--high); }
+
+  .id-chip{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--mono); font-size:12.5px; font-weight:600;
+    background: var(--accent-soft); color:var(--accent);
+    padding: 6px 10px; border-radius:8px; margin-top:12px;
+  }
+  .id-chip svg{ width:12px; height:12px; opacity:.8; }
+  .id-chip:active{ opacity:0.6; }
+
+  .empty, .error-state{
+    text-align:center; padding: 60px 20px; color:var(--ink-soft);
+  }
+  .error-state{ color: var(--high); }
+  .error-state button{
+    margin-top:14px; background:var(--accent); color:#fff; border:none; padding:10px 20px;
+    border-radius:10px; font-weight:700; font-size:14px;
+  }
+  .skeleton{ background: var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; }
+  .sk-bar{ height:12px; background: var(--neutral-bg); border-radius:6px; margin-bottom:8px; animation: shimmer 1.4s infinite ease-in-out; }
+  @keyframes shimmer{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+
+  /* ---------- Detail sheet ---------- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(15,20,25,0.45); z-index:40;
+    opacity:0; pointer-events:none; transition: opacity .2s ease;
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:41;
+    background: var(--surface); border-radius:20px 20px 0 0;
+    padding: 10px 20px calc(env(safe-area-inset-bottom,0px) + 24px) 20px;
+    transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.8,.2,1);
+    max-height: 78vh; overflow-y:auto;
+  }
+  .sheet.show{ transform: translateY(0); }
+  .grabber{ width:36px; height:4px; background:var(--line); border-radius:99px; margin: 4px auto 16px auto; }
+  .sheet-head{ margin-bottom: 18px; }
+  .sheet-head .s-loc{ font-size:18px; font-weight:800; }
+  .sheet-head .s-id{ font-family:var(--mono); font-size:12.5px; color:var(--accent); margin-top:4px; font-weight:600; }
+  .click-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 14px 0; border-bottom:1px solid var(--line);
+  }
+  .click-row:last-child{ border-bottom:none; }
+  .click-name{ font-size:14px; color:var(--ink-soft); font-weight:600; }
+  .click-val{ font-size:20px; font-weight:800; font-family:var(--mono); }
+  .close-btn{
+    position:absolute; top:14px; right:16px; width:30px; height:30px; border-radius:50%;
+    background: var(--bg); border:none; display:flex; align-items:center; justify-content:center; color:var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-row">
+    <h1>Τοποθεσίες · CHECK_2</h1>
+    <div class="sync">
+      <span class="dot live" id="syncDot"></span>
+      <span id="syncText">Φόρτωση…</span>
+    </div>
+  </div>
+  <div class="search-row">
+    <div class="search-box">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="searchInput" placeholder="Αναζήτηση τοποθεσίας ή ID…" />
+    </div>
+    <button class="refresh-btn" id="refreshBtn" aria-label="Ανανέωση">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </div>
+  <div class="sort-row" id="sortRow">
+    <div class="sort-chip active" data-sort="priority">Προτεραιότητα</div>
+    <div class="sort-chip" data-sort="days">Ημέρες</div>
+    <div class="sort-chip" data-sort="location">Τοποθεσία (Α-Ω)</div>
+  </div>
+</header>
+
+<main>
+  <div class="count-line" id="countLine"></div>
+  <div id="listContainer">
+    <div class="skeleton"><div class="sk-bar" style="width:60%"></div><div class="sk-bar" style="width:40%"></div></div>
+    <div class="skeleton"><div class="sk-bar" style="width:50%"></div><div class="sk-bar" style="width:35%"></div></div>
+    <div class="skeleton"><div class="sk-bar" style="width:65%"></div><div class="sk-bar" style="width:30%"></div></div>
+  </div>
+</main>
+
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet">
+  <div class="grabber"></div>
+  <button class="close-btn" id="closeSheet">✕</button>
+  <div class="sheet-head">
+    <div class="s-loc" id="sheetLoc"></div>
+    <div class="s-id" id="sheetId"></div>
+  </div>
+  <div id="sheetBody"></div>
+</div>
+
+<script>
+const SHEET_ID = "1bPntA-aU7EUmuwKcoZMFhYQYdReZ2zO1vRuJLZ3d99w";
+const SHEET_NAME = "CHECK_2";
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+const REQUIRED = {
+  loc: ["ΤΟΠΟΘΕΣΙΑ"],
+  id: ["ID"],
+  lastCheck: ["LAST CHECK"],
+  days: ["DAYS SINCE LAST CHECK"],
+  priority: ["PRIORITY"],
+  clicksRan: ["CLICKS RAN"],
+  clicksXort: ["CLICKS XORT"],
+  clicksBoth: ["CLICKS RAN&XORT", "CLICKS RAN & XORT"]
+};
+
+let allRows = [];
+let currentSort = "priority";
+let autoTimer = null;
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=""; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=""; }
+      else if(c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function norm(s){ return (s||"").toString().trim().toUpperCase(); }
+
+function findColumns(rows){
+  for(let r=0; r<rows.length; r++){
+    const cells = rows[r].map(norm);
+    if(cells.includes("ΤΟΠΟΘΕΣΙΑ") && cells.includes("ID")){
+      const map = {};
+      for(const key in REQUIRED){
+        const options = REQUIRED[key].map(norm);
+        let idx = -1;
+        for(const opt of options){ idx = cells.indexOf(opt); if(idx !== -1) break; }
+        map[key] = idx;
+      }
+      return { headerRow: r, map };
+    }
+  }
+  return null;
+}
+
+function priorityClass(val){
+  const v = norm(val);
+  if(!v) return {cls:"neutral", label: "—"};
+  if(v.includes("ΥΨ") || v.includes("HIGH") || v === "1") return {cls:"high", label: val};
+  if(v.includes("ΜΕΣ") || v.includes("MED") || v === "2") return {cls:"med", label: val};
+  if(v.includes("ΧΑΜ") || v.includes("LOW") || v === "3") return {cls:"low", label: val};
+  return {cls:"neutral", label: val};
+}
+
+function priorityRank(val){
+  const v = norm(val);
+  if(v.includes("ΥΨ") || v.includes("HIGH") || v === "1") return 0;
+  if(v.includes("ΜΕΣ") || v.includes("MED") || v === "2") return 1;
+  if(v.includes("ΧΑΜ") || v.includes("LOW") || v === "3") return 2;
+  return 3;
+}
+
+async function loadData(showSkeleton){
+  const dot = document.getElementById("syncDot");
+  const text = document.getElementById("syncText");
+  const refreshBtn = document.getElementById("refreshBtn");
+  refreshBtn.classList.add("spin");
+  dot.className = "dot live";
+  text.textContent = "Ενημέρωση…";
+
+  try{
+    const res = await fetch(CSV_URL + "&_=" + Date.now(), { cache: "no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const csvText = await res.text();
+    const rows = parseCSV(csvText);
+    const found = findColumns(rows);
+    if(!found) throw new Error("Δεν βρέθηκαν οι στήλες");
+
+    const { headerRow, map } = found;
+    const data = [];
+    for(let r = headerRow + 1; r < rows.length; r++){
+      const row = rows[r];
+      const idVal = map.id !== -1 ? (row[map.id]||"").trim() : "";
+      const locVal = map.loc !== -1 ? (row[map.loc]||"").trim() : "";
+      if(!idVal && !locVal) continue;
+      data.push({
+        loc: locVal,
+        id: idVal,
+        lastCheck: map.lastCheck !== -1 ? (row[map.lastCheck]||"").trim() : "",
+        days: map.days !== -1 ? (row[map.days]||"").trim() : "",
+        priority: map.priority !== -1 ? (row[map.priority]||"").trim() : "",
+        clicksRan: map.clicksRan !== -1 ? (row[map.clicksRan]||"").trim() : "",
+        clicksXort: map.clicksXort !== -1 ? (row[map.clicksXort]||"").trim() : "",
+        clicksBoth: map.clicksBoth !== -1 ? (row[map.clicksBoth]||"").trim() : ""
+      });
+    }
+    allRows = data;
+    dot.className = "dot live";
+    const now = new Date();
+    text.textContent = "Ενημερώθηκε " + now.toLocaleTimeString('el-GR', {hour:'2-digit', minute:'2-digit'});
+    renderList();
+  } catch(err){
+    dot.className = "dot err";
+    text.textContent = "Σφάλμα σύνδεσης";
+    if(showSkeleton || allRows.length === 0){
+      document.getElementById("listContainer").innerHTML =
+        `<div class="error-state">
+           Δεν ήταν δυνατή η φόρτωση των δεδομένων.<br>Έλεγξε τη σύνδεση ή τα δικαιώματα κοινής χρήσης του sheet.
+           <br><button onclick="loadData(true)">Δοκίμασε ξανά</button>
+         </div>`;
+    }
+  } finally {
+    refreshBtn.classList.remove("spin");
+  }
+}
+
+function renderList(){
+  const q = norm(document.getElementById("searchInput").value);
+  let items = allRows.filter(it => !q || norm(it.loc).includes(q) || norm(it.id).includes(q));
+
+  items = items.slice().sort((a,b) => {
+    if(currentSort === "priority") return priorityRank(a.priority) - priorityRank(b.priority);
+    if(currentSort === "days") return (parseFloat(b.days)||0) - (parseFloat(a.days)||0);
+    if(currentSort === "location") return a.loc.localeCompare(b.loc, 'el');
+    return 0;
+  });
+
+  document.getElementById("countLine").textContent = items.length + " τοποθεσίες";
+
+  const container = document.getElementById("listContainer");
+  if(items.length === 0){
+    container.innerHTML = `<div class="empty">Δεν βρέθηκαν αποτελέσματα.</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map(it => {
+    const pr = priorityClass(it.priority);
+    const daysNum = parseFloat(it.days);
+    const daysWarn = !isNaN(daysNum) && daysNum >= 7 ? "days-warn" : "";
+    return `
+      <div class="card">
+        <div class="card-top">
+          <div class="loc">${escapeHtml(it.loc || "—")}</div>
+          <div class="badge ${pr.cls}">${escapeHtml(pr.label)}</div>
+        </div>
+        <div class="meta-row">
+          <div class="meta">
+            <span class="label">Τελ. έλεγχος</span>
+            <span class="value">${escapeHtml(it.lastCheck || "—")}</span>
+          </div>
+          <div class="meta">
+            <span class="label">Ημέρες</span>
+            <span class="value ${daysWarn}">${escapeHtml(it.days || "—")}</span>
+          </div>
+        </div>
+        <div class="id-chip" data-id="${escapeAttr(it.id)}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          ID: ${escapeHtml(it.id || "—")}
+        </div>
+      </div>`;
+  }).join("");
+
+  container.querySelectorAll(".id-chip").forEach(el => {
+    el.addEventListener("click", () => openDetail(el.getAttribute("data-id")));
+  });
+}
+
+function escapeHtml(s){
+  return (s||"").toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(s){ return escapeHtml(s); }
+
+function openDetail(id){
+  const item = allRows.find(r => r.id === id);
+  if(!item) return;
+  document.getElementById("sheetLoc").textContent = item.loc || "—";
+  document.getElementById("sheetId").textContent = "ID: " + (item.id || "—");
+  document.getElementById("sheetBody").innerHTML = `
+    <div class="click-row"><span class="click-name">CLICKS RAN</span><span class="click-val">${escapeHtml(item.clicksRan || "0")}</span></div>
+    <div class="click-row"><span class="click-name">CLICKS XORT</span><span class="click-val">${escapeHtml(item.clicksXort || "0")}</span></div>
+    <div class="click-row"><span class="click-name">CLICKS RAN&amp;XORT</span><span class="click-val">${escapeHtml(item.clicksBoth || "0")}</span></div>
+  `;
+  document.getElementById("overlay").classList.add("show");
+  document.getElementById("sheet").classList.add("show");
+}
+function closeDetail(){
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("sheet").classList.remove("show");
+}
+
+document.getElementById("overlay").addEventListener("click", closeDetail);
+document.getElementById("closeSheet").addEventListener("click", closeDetail);
+document.getElementById("refreshBtn").addEventListener("click", () => loadData(true));
+document.getElementById("searchInput").addEventListener("input", renderList);
+document.getElementById("sortRow").addEventListener("click", (e) => {
+  const chip = e.target.closest(".sort-chip");
+  if(!chip) return;
+  document.querySelectorAll(".sort-chip").forEach(c => c.classList.remove("active"));
+  chip.classList.add("active");
+  currentSort = chip.getAttribute("data-sort");
+  renderList();
+});
+
+loadData(true);
+autoTimer = setInterval(() => loadData(false), 60000);
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible") loadData(false);
+});
+</script>
+</body>
+</html>
