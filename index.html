@@ -28,7 +28,6 @@
   html,body{margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:var(--sans); height:100%;}
   body{overscroll-behavior-y: none;}
 
-  /* ---------- Header ---------- */
   header{
     position: sticky; top:0; z-index:20;
     background: var(--surface);
@@ -68,7 +67,6 @@
   }
   .sort-chip.active{ background: var(--accent); border-color:var(--accent); color:#fff; }
 
-  /* ---------- List ---------- */
   main{ padding: 12px 12px 40px 12px; max-width:640px; margin:0 auto; }
   .count-line{ font-size:12px; color:var(--ink-soft); padding: 2px 4px 10px 4px; }
 
@@ -113,7 +111,6 @@
   .sk-bar{ height:12px; background: var(--neutral-bg); border-radius:6px; margin-bottom:8px; animation: shimmer 1.4s infinite ease-in-out; }
   @keyframes shimmer{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
 
-  /* ---------- Detail sheet ---------- */
   .overlay{
     position:fixed; inset:0; background: rgba(15,20,25,0.45); z-index:40;
     opacity:0; pointer-events:none; transition: opacity .2s ease;
@@ -193,71 +190,77 @@
 <script>
 const SHEET_ID = "1bPntA-aU7EUmuwKcoZMFhYQYdReZ2zO1vRuJLZ3d99w";
 const SHEET_NAME = "CHECK_2";
-const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
 
-// Λίστα εναλλακτικών CORS proxies. Δοκιμάζονται με τη σειρά.
-// Αν κάποιος σταματήσει να δουλεύει στο μέλλον, προσθέτεις άλλον εδώ
-// χωρίς να χρειάζεται να αλλάξεις τίποτα άλλο στον κώδικα.
-const PROXIES = [
-  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-];
-
-const REQUIRED = {
-  loc: ["ΤΟΠΟΘΕΣΙΑ"],
-  id: ["ID"],
-  lastCheck: ["LAST CHECK"],
-  days: ["DAYS SINCE LAST CHECK"],
-  priority: ["PRIORITY"],
-  clicksRan: ["CLICKS RAN"],
-  clicksXort: ["CLICKS XORT"],
-  clicksBoth: ["CLICKS RAN&XORT", "CLICKS RAN & XORT"]
+// Σταθερές θέσεις στηλών επιβεβαιωμένες από τη δομή του πίνακα CHECK_2:
+// 0 ΤΟΠΟΘΕΣΙΑ | 1 ID | 2 ΙΔΙΟΚΤΗΤΗΣ | 3 ΘΕΣΗ | 4 LAST CHECK | 5 (κρυφή)
+// 6 DAYS SINCE LAST CHECK | 7 PRIORITY | 8 (κρυφή)
+// 9 CLICKS RAN | 10 CLICKS XORT | 11 CLICKS RAN&XORT | 12 TOTAL CHARGE
+const COL = {
+  loc: 0, id: 1, lastCheck: 4, days: 6, priority: 7,
+  clicksRan: 9, clicksXort: 10, clicksBoth: 11
 };
 
 let allRows = [];
 let currentSort = "priority";
 let autoTimer = null;
-
-function parseCSV(text){
-  const rows = [];
-  let row = [], field = "", inQuotes = false;
-  for(let i=0;i<text.length;i++){
-    const c = text[i];
-    if(inQuotes){
-      if(c === '"'){
-        if(text[i+1] === '"'){ field += '"'; i++; }
-        else inQuotes = false;
-      } else field += c;
-    } else {
-      if(c === '"') inQuotes = true;
-      else if(c === ','){ row.push(field); field=""; }
-      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=""; }
-      else if(c === '\r'){ /* skip */ }
-      else field += c;
-    }
-  }
-  if(field.length || row.length){ row.push(field); rows.push(row); }
-  return rows;
-}
+let jsonpCounter = 0;
 
 function norm(s){ return (s||"").toString().trim().toUpperCase(); }
 
-function findColumns(rows){
-  for(let r=0; r<rows.length; r++){
-    const cells = rows[r].map(norm);
-    if(cells[0] === "ΤΟΠΟΘΕΣΙΑ"){
-      // Fixed column positions confirmed from the CHECK_2 table structure:
-      // 0 ΤΟΠΟΘΕΣΙΑ | 1 ID | 2 ΙΔΙΟΚΤΗΤΗΣ | 3 ΘΕΣΗ | 4 LAST CHECK | 5 (hidden)
-      // 6 DAYS SINCE LAST CHECK | 7 PRIORITY | 8 (hidden)
-      // 9 CLICKS RAN | 10 CLICKS XORT | 11 CLICKS RAN&XORT | 12 TOTAL CHARGE
-      const map = {
-        loc: 0, id: 1, lastCheck: 4, days: 6, priority: 7,
-        clicksRan: 9, clicksXort: 10, clicksBoth: 11
-      };
-      return { headerRow: r, map };
-    }
-  }
-  return null;
+// ---------- JSONP φόρτωση απευθείας από Google Sheets ----------
+// Αυτή η μέθοδος φορτώνει τα δεδομένα μέσω <script> tag αντί για fetch().
+// Τα <script> tags ΔΕΝ υπόκεινται σε περιορισμούς CORS, οπότε δεν
+// χρειάζεται κανένα τρίτο proxy (corsproxy.io, allorigins.win κλπ) —
+// μιλάμε απευθείας με τους servers της Google.
+function fetchSheetJSONP(){
+  return new Promise((resolve, reject) => {
+    jsonpCounter++;
+    const callbackName = "__gvizCb_" + Date.now() + "_" + jsonpCounter;
+    const timeoutMs = 15000;
+
+    let settled = false;
+    const cleanup = () => {
+      delete window[callbackName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    };
+
+    const timer = setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Λήξη χρόνου αναμονής (timeout) από τη Google."));
+    }, timeoutMs);
+
+    window[callbackName] = function(response){
+      if(settled) return;
+      settled = true;
+      cleanup();
+      resolve(response);
+    };
+
+    const url = "https://docs.google.com/spreadsheets/d/" + SHEET_ID +
+      "/gviz/tq?sheet=" + encodeURIComponent(SHEET_NAME) +
+      "&tqx=out:json;responseHandler:" + callbackName +
+      "&_cb=" + Date.now();
+
+    const script = document.createElement("script");
+    script.src = url;
+    script.onerror = function(){
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Δεν ήταν δυνατή η σύνδεση με το Google Sheets."));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+function cellText(cell){
+  if(!cell) return "";
+  if(cell.f !== undefined && cell.f !== null) return String(cell.f);
+  if(cell.v !== undefined && cell.v !== null) return String(cell.v);
+  return "";
 }
 
 function priorityClass(val){
@@ -277,28 +280,6 @@ function priorityRank(val){
   return 3;
 }
 
-async function fetchViaProxies(targetUrl){
-  let lastErr = null;
-  for(const buildUrl of PROXIES){
-    try{
-      const attemptUrl = buildUrl(targetUrl) + (buildUrl(targetUrl).includes("?") ? "&" : "?") + "_cb=" + Date.now();
-      const res = await fetch(attemptUrl, { cache: "no-store" });
-      if(!res.ok) throw new Error("HTTP " + res.status);
-      const text = await res.text();
-      // Μερικά proxy γυρνάνε JSON error αντί για CSV όταν αποτυγχάνουν
-      const trimmed = text.trim();
-      if(trimmed.startsWith("{") && trimmed.toLowerCase().includes('"error"')){
-        throw new Error("Proxy error: " + trimmed.slice(0, 200));
-      }
-      return text;
-    } catch(e){
-      lastErr = e;
-      // δοκίμασε το επόμενο proxy στη λίστα
-    }
-  }
-  throw lastErr || new Error("Όλα τα proxy απέτυχαν");
-}
-
 async function loadData(showSkeleton){
   const dot = document.getElementById("syncDot");
   const text = document.getElementById("syncText");
@@ -308,32 +289,31 @@ async function loadData(showSkeleton){
   text.textContent = "Ενημέρωση…";
 
   try{
-    const csvText = await fetchViaProxies(GVIZ_URL);
-    const rows = parseCSV(csvText);
-    const found = findColumns(rows);
-    if(!found){
-      const preview = rows.slice(0, 8).map((r,i) => `Γραμμή ${i+1}: [${r.join(" | ")}]`).join("\n");
-      throw new Error("COLUMNS_NOT_FOUND::" + preview);
+    const response = await fetchSheetJSONP();
+
+    if(!response || response.status !== "ok" || !response.table){
+      throw new Error("Μη έγκυρη απάντηση από το Google Sheets.");
     }
 
-    const { headerRow, map } = found;
+    const rows = response.table.rows || [];
     const data = [];
-    for(let r = headerRow + 1; r < rows.length; r++){
-      const row = rows[r];
-      const idVal = map.id !== -1 ? (row[map.id]||"").trim() : "";
-      const locVal = map.loc !== -1 ? (row[map.loc]||"").trim() : "";
+    for(const row of rows){
+      const c = row.c || [];
+      const idVal = cellText(c[COL.id]).trim();
+      const locVal = cellText(c[COL.loc]).trim();
       if(!idVal && !locVal) continue;
       data.push({
         loc: locVal,
         id: idVal,
-        lastCheck: map.lastCheck !== -1 ? (row[map.lastCheck]||"").trim() : "",
-        days: map.days !== -1 ? (row[map.days]||"").trim() : "",
-        priority: map.priority !== -1 ? (row[map.priority]||"").trim() : "",
-        clicksRan: map.clicksRan !== -1 ? (row[map.clicksRan]||"").trim() : "",
-        clicksXort: map.clicksXort !== -1 ? (row[map.clicksXort]||"").trim() : "",
-        clicksBoth: map.clicksBoth !== -1 ? (row[map.clicksBoth]||"").trim() : ""
+        lastCheck: cellText(c[COL.lastCheck]).trim(),
+        days: cellText(c[COL.days]).trim(),
+        priority: cellText(c[COL.priority]).trim(),
+        clicksRan: cellText(c[COL.clicksRan]).trim(),
+        clicksXort: cellText(c[COL.clicksXort]).trim(),
+        clicksBoth: cellText(c[COL.clicksBoth]).trim()
       });
     }
+
     allRows = data;
     dot.className = "dot live";
     const now = new Date();
@@ -341,27 +321,13 @@ async function loadData(showSkeleton){
     renderList();
   } catch(err){
     dot.className = "dot err";
-    const msg = err && err.message ? err.message : "";
-    if(msg.startsWith("COLUMNS_NOT_FOUND::")){
-      text.textContent = "Δεν βρέθηκαν οι στήλες";
-      const preview = msg.replace("COLUMNS_NOT_FOUND::", "");
-      if(showSkeleton || allRows.length === 0){
-        document.getElementById("listContainer").innerHTML =
-          `<div class="error-state">
-             Βρήκα το sheet, αλλά δεν αναγνώρισα τις στήλες ΤΟΠΟΘΕΣΙΑ/ID.<br>Στείλε screenshot του παρακάτω κειμένου:
-             <pre style="text-align:left; white-space:pre-wrap; background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:12px; font-size:11px; color:var(--ink);">${escapeHtml(preview)}</pre>
-             <button onclick="loadData(true)">Δοκίμασε ξανά</button>
-           </div>`;
-      }
-    } else {
-      text.textContent = "Σφάλμα σύνδεσης";
-      if(showSkeleton || allRows.length === 0){
-        document.getElementById("listContainer").innerHTML =
-          `<div class="error-state">
-             Δεν ήταν δυνατή η φόρτωση των δεδομένων.<br>Έλεγξε τη σύνδεση ή τα δικαιώματα κοινής χρήσης του sheet.
-             <br><button onclick="loadData(true)">Δοκίμασε ξανά</button>
-           </div>`;
-      }
+    text.textContent = "Σφάλμα σύνδεσης";
+    if(showSkeleton || allRows.length === 0){
+      document.getElementById("listContainer").innerHTML =
+        `<div class="error-state">
+           Δεν ήταν δυνατή η φόρτωση των δεδομένων.<br>Έλεγξε τη σύνδεση ή τα δικαιώματα κοινής χρήσης του sheet.
+           <br><button onclick="loadData(true)">Δοκίμασε ξανά</button>
+         </div>`;
     }
   } finally {
     refreshBtn.classList.remove("spin");
