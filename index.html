@@ -194,7 +194,14 @@
 const SHEET_ID = "1bPntA-aU7EUmuwKcoZMFhYQYdReZ2zO1vRuJLZ3d99w";
 const SHEET_NAME = "CHECK_2";
 const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
-const CSV_URL = `https://corsproxy.io/?url=${encodeURIComponent(GVIZ_URL)}`;
+
+// Λίστα εναλλακτικών CORS proxies. Δοκιμάζονται με τη σειρά.
+// Αν κάποιος σταματήσει να δουλεύει στο μέλλον, προσθέτεις άλλον εδώ
+// χωρίς να χρειάζεται να αλλάξεις τίποτα άλλο στον κώδικα.
+const PROXIES = [
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+];
 
 const REQUIRED = {
   loc: ["ΤΟΠΟΘΕΣΙΑ"],
@@ -270,6 +277,28 @@ function priorityRank(val){
   return 3;
 }
 
+async function fetchViaProxies(targetUrl){
+  let lastErr = null;
+  for(const buildUrl of PROXIES){
+    try{
+      const attemptUrl = buildUrl(targetUrl) + (buildUrl(targetUrl).includes("?") ? "&" : "?") + "_cb=" + Date.now();
+      const res = await fetch(attemptUrl, { cache: "no-store" });
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const text = await res.text();
+      // Μερικά proxy γυρνάνε JSON error αντί για CSV όταν αποτυγχάνουν
+      const trimmed = text.trim();
+      if(trimmed.startsWith("{") && trimmed.toLowerCase().includes('"error"')){
+        throw new Error("Proxy error: " + trimmed.slice(0, 200));
+      }
+      return text;
+    } catch(e){
+      lastErr = e;
+      // δοκίμασε το επόμενο proxy στη λίστα
+    }
+  }
+  throw lastErr || new Error("Όλα τα proxy απέτυχαν");
+}
+
 async function loadData(showSkeleton){
   const dot = document.getElementById("syncDot");
   const text = document.getElementById("syncText");
@@ -279,9 +308,7 @@ async function loadData(showSkeleton){
   text.textContent = "Ενημέρωση…";
 
   try{
-    const res = await fetch(CSV_URL + "&_=" + Date.now(), { cache: "no-store" });
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const csvText = await res.text();
+    const csvText = await fetchViaProxies(GVIZ_URL);
     const rows = parseCSV(csvText);
     const found = findColumns(rows);
     if(!found){
